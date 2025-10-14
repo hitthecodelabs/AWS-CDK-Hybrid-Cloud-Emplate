@@ -88,3 +88,10 @@ cdk deploy
 ```
 
 El proceso tardará varios minutos. Al finalizar, verás las salidas (Outputs) en la terminal.
+
+## Outputs del Stack
+
+Una vez desplegado, el stack te proporcionará la siguiente información:
+  - PublicIPAddress: La IP pública estática de tu servidor web EC2.
+  - DBEndpointAddress: El endpoint para conectarte a tu base de datos RDS.
+  - DBSecretName: El nombre del secreto en AWS Secrets Manager donde se guardan las credenciales de la base de datos.

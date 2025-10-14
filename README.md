@@ -51,3 +51,40 @@ git clone https://github.com/hitthecodelabs/AWS-CDK-Hybrid-Cloud-Emplate
 cd cdk-hybrid-cloud-template
 ```
 
+
+**2. Instalar Dependencias:**
+```bash
+npm install
+npm install dotenv
+```
+
+**3. Configurar el Entorno:**
+Crea un archivo .env a partir de la plantilla. Este archivo contendrá todos tus secretos y no será subido al repositorio.
+
+```bash
+cp .env.example .env
+```
+
+Ahora, edita el archivo .env y rellena los valores con la información de tu entorno:
+
+```env
+# .env - Rellena estos valores
+SSH_ALLOWED_IP=TU_IP_PUBLICA/32
+EC2_KEY_PAIR_NAME=nombre-de-tu-key-pair-en-aws
+ONPREM_PUBLIC_IP=ip-publica-de-tu-firewall-sophos
+ONPREM_LOCAL_SUBNET=subred-de-tu-red-local
+VPN_PRESHARED_KEY=tu-clave-secreta-compatible-con-aws
+```
+
+**4. Desplegar el Stack:**
+Primero, si es la primera vez que usas CDK en esta región/cuenta, ejecuta `bootstrap`.
+
+```bash
+cdk bootstrap
+```
+Luego, despliega la infraestructura.
+```bash
+cdk deploy
+```
+
+El proceso tardará varios minutos. Al finalizar, verás las salidas (Outputs) en la terminal.

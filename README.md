@@ -1,97 +1,216 @@
-# AWS-CDK-Hybrid-Cloud-Emplate
+# AWS CDK — Hybrid Cloud Template (VPC + EC2 + VPN S2S + RDS opcional + Route53 opcional)
 
-Este repositorio es una plantilla de AWS CDK para desplegar una arquitectura web común en AWS, incluyendo una conexión VPN Site-to-Site para establecer un entorno de nube híbrida. La infraestructura es ideal para laboratorios, pruebas de concepto o como base para proyectos más complejos.
+Plantilla de **AWS CDK v2** para desplegar una arquitectura web común y **reutilizable por cliente**, con foco en escenarios **híbridos**:
+- VPC con subredes públicas/privadas y **VPN Site‑to‑Site** (VGW + CGW + conexión).
+- EC2 con **IP elástica** y **grupos de seguridad mínimos**.
+- **RDS MariaDB** (opcional) con credenciales en **AWS Secrets Manager**.
+- **Route 53** (opcional) para crear registros **A** apuntando al EIP.
 
-Toda la configuración sensible (IPs, claves, subredes) se gestiona a través de variables de entorno para garantizar que el código del repositorio permanezca genérico y seguro.
-
----
-
-## Arquitectura Desplegada
-
-Este stack de CDK crea los siguientes recursos en AWS:
-
-- **Red (VPC):**
-  - Una VPC con 2 Zonas de Disponibilidad para alta resiliencia.
-  - Subredes públicas para recursos de cara a internet (como el servidor web).
-  - Subredes privadas para recursos de backend (como la base de datos).
-  - Un Virtual Private Gateway para la conexión VPN.
-
-- **Cómputo (EC2):**
-  - Una instancia EC2 (Amazon Linux 2) en una subred pública.
-  - Un Grupo de Seguridad que permite tráfico HTTP (puerto 80) y SSH (puerto 22) desde una IP específica.
-  - Una IP Elástica asociada a la instancia para tener una dirección IP pública fija.
-
-- **Base de Datos (RDS):**
-  - Una instancia de base de datos MariaDB en una subred privada para máxima seguridad.
-  - Un Grupo de Seguridad que solo permite conexiones desde el servidor web.
-  - Las credenciales se gestionan de forma segura a través de AWS Secrets Manager.
-
-- **Conectividad (VPN):**
-  - Un Customer Gateway que representa el firewall local (ej. Sophos).
-  - Una Conexión VPN Site-to-Site con parámetros de encriptación seguros (AES256, SHA2-256, DH Group 14).
-  - Una ruta estática para dirigir el tráfico desde la VPC hacia la red local a través del túnel VPN.
+> **Cero secretos en código**: toda la data sensible se inyecta vía **variables de entorno** usando un archivo `.env` (no versionado).
 
 ---
 
-## Prerrequisitos
+## 🧱 Arquitectura desplegada
 
-Antes de empezar, asegúrate de tener instalado y configurado lo siguiente:
-- Cuenta de AWS
-- AWS CLI (`aws configure`)
-- Node.js (v16 o superior)
-- AWS CDK (`npm install -g aws-cdk`)
+**Red (VPC)**
+- VPC en 2 AZs, con `natGateways` configurable.
+- Subredes **públicas** (web) y **privadas con egress** (data/backend).
+- **Virtual Private Gateway (VGW)** para la VPN Site‑to‑Site.
+- **Propagación de rutas** desde la VPN a las tablas de ruteo públicas y privadas.
+
+**Cómputo (EC2)**
+- Instancia Amazon Linux 2 en subred pública (sin public IP directa).
+- **Elastic IP (EIP)** asociado a la instancia.
+- **Security Group** con:
+  - Ingress: **HTTP (80)**, **HTTPS (443)** abiertos; **SSH (22)** restringido a tu IP.
+  - Egress explícitos: **DNS(53/udp)**, **HTTP(80)**, **HTTPS(443)**, **ICMP**.
+  - Egress opcional a **SAP/API** on‑prem según `.env`.
+
+**Conectividad (VPN Site‑to‑Site)**
+- **Customer Gateway (CGW)** representando tu firewall on‑prem (Sophos/Azure/etc.).
+- **VPNConnection** (IPsec IKEv2, AES256/SHA2‑256/DH14).
+- **Ruta estática** hacia tu red remota (`REMOTE_NETWORK_CIDR`).
+
+**Base de datos (RDS – opcional)**
+- **MariaDB 10.6** en subred privada.
+- SG que **solo** permite 3306 desde el SG del WebServer.
+- Credenciales en **Secrets Manager** (usuario admin generado).
+
+**DNS (Route 53 – opcional)**
+- Lookup de **Hosted Zone** por dominio raíz.
+- Registros **A** en **apex (@)** y **www** apuntando al **EIP**.
 
 ---
 
-## 🚀 Guía de Despliegue
+## ✅ Prerrequisitos
 
-**1. Clonar el Repositorio:**
+- Cuenta de AWS con permisos para crear VPC/EC2/RDS/VPN/Route53/Secrets.
+- **AWS CLI** configurado: `aws configure`
+- **Node.js** 16+
+- **AWS CDK v2**: `npm i -g aws-cdk`
+- (Recomendado) **Cuenta y región bootstrapped**: `cdk bootstrap`
+
+---
+
+## 📦 Instalación
+
 ```bash
-git clone https://github.com/hitthecodelabs/AWS-CDK-Hybrid-Cloud-Emplate
-cd cdk-hybrid-cloud-template
-```
-
-
-**2. Instalar Dependencias:**
-```bash
+git clone https://github.com/hitthecodelabs/AWS-CDK-Hybrid-Cloud-Template.git
+cd AWS-CDK-Hybrid-Cloud-Template
 npm install
-npm install dotenv
 ```
 
-**3. Configurar el Entorno:**
-Crea un archivo .env a partir de la plantilla. Este archivo contendrá todos tus secretos y no será subido al repositorio.
+> La plantilla usa `dotenv`. No necesitas instalarlo manualmente, viene en `package.json`.
+
+---
+
+## 🔒 Configuración por `.env`
+
+Crea tu archivo `.env` desde el ejemplo y edítalo:
 
 ```bash
 cp .env.example .env
 ```
 
-Ahora, edita el archivo .env y rellena los valores con la información de tu entorno:
-
+### `.env.example`
 ```env
-# .env - Rellena estos valores
-SSH_ALLOWED_IP=TU_IP_PUBLICA/32
-EC2_KEY_PAIR_NAME=nombre-de-tu-key-pair-en-aws
-ONPREM_PUBLIC_IP=ip-publica-de-tu-firewall-sophos
-ONPREM_LOCAL_SUBNET=subred-de-tu-red-local
-VPN_PRESHARED_KEY=tu-clave-secreta-compatible-con-aws
+# ==============
+# Red / VPC
+# ==============
+NAT_GATEWAYS=1
+EC2_INSTANCE_TYPE=t3.medium
+
+# ==============
+# Seguridad / Acceso
+# ==============
+SSH_ALLOWED_IP=
+EC2_KEY_PAIR_NAME=my-keypair
+
+# ==============
+# Integraciones opcionales (egress a SAP/API on-prem)
+# ==============
+SAP_API_HOST_IP=         # ej: 10.1.0.15/32  (dejar vacío para omitir regla)
+SAP_API_PORT=50000
+
+# ==============
+# VPN Site-to-Site
+# ==============
+CGW_PUBLIC_IP=
+CGW_BGP_ASN=65000
+VPN_PRESHARED_KEY=change-me
+REMOTE_NETWORK_CIDR=
+
+# ==============
+# Base de datos (RDS)
+# ==============
+ENABLE_RDS=true
+DB_NAME=appdb
+DB_ADMIN_USER=dbadmin
+# Si quieres conservar instancias/backups en producción:
+DB_RETAIN=false
+
+# ==============
+# DNS (Route 53)
+# ==============
+ENABLE_ROUTE53=false
+HOSTED_ZONE_DOMAIN=example.com
+CREATE_APEX_A_RECORD=true
+CREATE_WWW_A_RECORD=true
 ```
 
-**4. Desplegar el Stack:**
-Primero, si es la primera vez que usas CDK en esta región/cuenta, ejecuta `bootstrap`.
+> ⚠️ **No** subas `.env` al repo. Agrega `/.env` a tu `.gitignore`.
 
+---
+
+## 🚀 Despliegue
+
+1) (Solo la primera vez por cuenta/región)
 ```bash
 cdk bootstrap
 ```
-Luego, despliega la infraestructura.
+
+2) **Deploy** (puedes pasar contexto, p. ej. `-c env=prod`)
 ```bash
 cdk deploy
 ```
 
-El proceso tardará varios minutos. Al finalizar, verás las salidas (Outputs) en la terminal.
+Al finalizar verás los **Outputs** en consola.
 
-## Outputs del Stack
+---
 
-Una vez desplegado, el stack te proporcionará la siguiente información:
-  - PublicIPAddress: La IP pública estática de tu servidor web EC2.
-  - DBEndpointAddress: El endpoint para conectarte a tu base de datos RDS.
-  - DBSecretName: El nombre del secreto en AWS Secrets Manager donde se guardan las credenciales de la base de datos.
+## 📤 Outputs del Stack
+
+- **VpcId** — ID de la VPC creada.
+- **PublicElasticIp** — EIP pública asociada al WebServer.
+- **WebServerInstanceId** — ID de la instancia EC2.
+- **WebServerSecurityGroupId** — ID del SG del WebServer.
+- **CustomerGatewayId** — ID del Customer Gateway.
+- **VpnConnectionId** — ID de la conexión VPN.
+
+Si `ENABLE_RDS=true`:
+- **DBEndpointAddress** — Endpoint de RDS MariaDB.
+- **DBSecretName** — Nombre del secreto con credenciales en Secrets Manager.
+
+Si `ENABLE_ROUTE53=true` y configurado el dominio:
+- **ApexARecord** / **WwwARecord** (según flags) apuntando al EIP.
+
+---
+
+## 🧰 Scripts útiles
+
+```bash
+# Sintetizar la CloudFormation sin desplegar
+npm run synth
+
+# Ver diferencias contra el estado actual
+npm run diff
+
+# Desplegar
+npm run deploy
+
+# Destruir (¡irreversible! verifica tus RETAIN flags antes)
+npm run destroy
+```
+
+> Estos scripts esperan que tengas Node 16+ y CDK v2 global. Ajusta en `package.json` si prefieres `npx cdk`.
+
+---
+
+## 💡 Buenas prácticas y notas
+
+- **Seguridad SSH**: deja `SSH_ALLOWED_IP` con tu /32 real; evita `0.0.0.0/0`.
+- **HTTPS**: el SG ya abre **443**; emite/instala tu certificado (ACM + ALB *o* cert manejado en EC2/Apache/Nginx).
+- **Costos**: EIP, RDS y VPN generan costos. En ambientes efímeros, considera `DB_RETAIN=false` y `ENABLE_RDS=false`.
+- **Route 53**: si habilitas DNS, asegúrate de tener la **Hosted Zone** en la misma cuenta y dominio válidos.
+- **VPN**: la conexión sale **estática**. Si prefieres BGP dinámico, adapta `staticRoutesOnly=false` y la config del on‑prem.
+
+---
+
+## 🧽 Limpieza
+
+Para liberar recursos (¡cuidado con datos persistentes!):
+```bash
+cdk destroy
+```
+Asegúrate de haber respaldado la información si usaste `DB_RETAIN=false`.
+
+---
+
+## 📁 Estructura mínima
+
+```
+.
+├─ bin/
+├─ lib/
+│  └─ jordan-aws-stack.ts   # stack principal (parametrizado por .env)
+├─ package.json
+├─ cdk.json
+├─ .env.example
+└─ README.md
+```
+
+---
+
+## © Licencia
+
+MIT — Úsalo como base y modíficalo según tus necesidades.

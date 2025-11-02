@@ -78,7 +78,7 @@ export class JordanAwsStack extends cdk.Stack {
     const NAT_GATEWAYS = envInt('NAT_GATEWAYS', 1);
     const INSTANCE_TYPE = parseInstanceType(process.env.EC2_INSTANCE_TYPE ?? 't3.medium');
 
-    const SSH_ALLOWED_IP = env('SSH_ALLOWED_IP');          // p.ej. "203.0.113.10/32"
+    const SSH_ALLOWED_IP = env('SSH_ALLOWED_IP');          // p.ej. "203.0.113.10/32", local computer/laptop/server
     const EC2_KEY_PAIR_NAME = env('EC2_KEY_PAIR_NAME');    // key pair existente
 
     const SAP_API_HOST_IP = process.env.SAP_API_HOST_IP;   // opcional

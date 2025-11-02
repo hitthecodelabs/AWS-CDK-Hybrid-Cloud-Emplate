@@ -89,7 +89,7 @@ EC2_KEY_PAIR_NAME=my-keypair
 # ==============
 # Integraciones opcionales (egress a SAP/API on-prem)
 # ==============
-SAP_API_HOST_IP=         # ej: 10.1.0.15/32  (dejar vacío para omitir regla)
+SAP_API_HOST_IP=
 SAP_API_PORT=50000
 
 # ==============

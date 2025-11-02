@@ -304,7 +304,7 @@ export class JordanAwsStack extends cdk.Stack {
     // 9) Tags de utilidad (costeo/filtrado)
     // ==================================================
     cdk.Tags.of(this).add('Project', 'Hybrid-Cloud-Template');
-    cdk.Tags.of(this).add('Owner', 'JordanAwsStack');
+    cdk.Tags.of(this).add('Owner', 'OwnerAwsStack');
     cdk.Tags.of(this).add('Environment', this.node.tryGetContext('env') ?? 'dev');
   }
 }
